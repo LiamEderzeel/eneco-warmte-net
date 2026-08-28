@@ -1,0 +1,26 @@
+# Secrets & session data
+.env
+*.env
+eneco_cookie.json
+
+# Exported data
+eneco_export/
+eneco_export.zip
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Nix
+.direnv/
+result
+result-*
+
+# Editor/OS
+.DS_Store
+.vscode/
+.idea/
