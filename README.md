@@ -1,79 +1,76 @@
-# eneco-data
+# Eneco Data
 
-[pyscript](https://hacs-pyscript.readthedocs.io/) apps for Home Assistant
-that pull your own GDPR data export from Eneco (district heating meter
-readings) and import it into HA's long-term statistics for the Energy
-Dashboard.
+A [Home Assistant](https://www.home-assistant.io/) custom integration that
+pulls your own Eneco GDPR data export (district heating meter readings) and
+imports it into HA's long-term statistics, so it's selectable as a gas/heat
+source on the Energy Dashboard.
 
-## Pipeline
+Installable via [HACS](https://hacs.xyz/) as a custom repository.
 
-Three apps, each independently testable, chained by a fourth:
+## How it works
 
-- **`eneco-fetch.py`** — logs in via a saved NextAuth session cookie,
-  downloads the GDPR export, and writes `Meterstanden.csv` to disk.
-  No parsing, no HA statistics.
-- **`eneco-parse.py`** — pure parsing logic (Dutch-decimal CSV →
-  monotonic per-date series). No network, no HA. Shared as a pyscript
-  *module* by the other apps, and also runnable standalone.
-- **`eneco-import.py`** — reads the CSV already on disk, parses it via
-  `eneco-parse.py`, and pushes readings into HA's recorder statistics.
-  No network calls.
-- **`eneco-main.py`** — the only one with a schedule. Runs once a day
-  and calls the fetch and import services in sequence, so there's a
-  single cron instead of one per step.
+- **`custom_components/eneco_data/api.py`** — logs in via a saved NextAuth
+  session cookie, downloads the GDPR export, and extracts
+  `Meterstanden.csv` in memory. No parsing, no HA statistics.
+- **`custom_components/eneco_data/parser.py`** — pure parsing logic
+  (Dutch-decimal CSV → monotonic per-date series). No network, no HA
+  dependency.
+- **`custom_components/eneco_data/coordinator.py`** — runs the fetch +
+  parse steps once every 12 hours and pushes the two district-heating
+  registers (GJ energy, m³ volume — both from the same physical meter,
+  not a separate gas meter) into HA's recorder as *external statistics*
+  (`eneco_data:heat_gj` / `eneco_data:heat_m3`). There's no separate
+  entity to create by hand — the Energy Dashboard's gas/heat source
+  picker lists external statistics directly.
+- **`custom_components/eneco_data/config_flow.py`** — the UI setup flow
+  (Settings → Devices & Services → Add Integration) and the reauth flow
+  that fires automatically when your session cookie expires.
 
-## Deploying to Home Assistant
+The one entity the integration owns is a diagnostic "Last successful
+import" timestamp sensor, so you can see at a glance whether the daily
+run is actually working.
 
-1. Install and enable the **pyscript** integration via HACS.
-2. Copy the apps into place:
-   - `eneco-fetch.py` → `config/pyscript/eneco_fetch.py`
-   - `eneco-import.py` → `config/pyscript/eneco_import.py`
-   - `eneco-main.py` → `config/pyscript/eneco_main.py`
-   - `eneco-parse.py` → `config/pyscript/modules/eneco_parse.py`
-     (pyscript's convention for modules shared between apps)
-3. Add to `secrets.yaml`:
-   ```yaml
-   eneco_customer_id: "your-customer-id"
-   eneco_api_key: "the-static-apikey-header-value"
-   ```
-4. Create `config/eneco_cookie.json` (not inside `pyscript/`) with a
-   fresh session token obtained by logging in to eneco.nl by hand
-   (DevTools → cookie `__Secure-next-auth.session-token`):
-   ```json
-   {"session_token": "<value from DevTools>"}
-   ```
-5. Create two entities for the imported statistics to attach to
-   (e.g. template sensors with `unit_of_measurement` `"GJ"` and
-   `"m³"`) — see the header of `eneco-import.py` for details.
-6. Reload pyscript.
+## Installing via HACS
 
-## Testing each step
+1. In HACS, add this repository as a **custom repository** (category:
+   Integration).
+2. Install "Eneco Data" and restart Home Assistant.
+3. Go to **Settings → Devices & Services → Add Integration**, search for
+   "Eneco Data", and fill in the setup form (see below for where each
+   value comes from).
 
-Each app exposes a `@service` you can call by hand from
-Developer Tools → Actions before trusting the daily run:
+## Getting the setup values
 
-- `pyscript.eneco_fetch_run` — fetch only, writes the CSV.
-- `pyscript.eneco_import_run` — parse + import only, using whatever
-  CSV is already on disk.
-- `pyscript.eneco_run_all` — runs both in sequence, same as the daily
-  05:00 trigger.
+There's no programmatic login — Eneco's login is password + emailed
+2FA-code gated, so the session token has to be obtained once by hand and
+pasted in. It renews itself automatically after that (every successful
+run reissues it with a fresh ~30-day expiry), so this is a one-time
+bootstrap step, not something you'll repeat regularly — until it does
+expire (e.g. after an extended period without HA running), at which point
+Home Assistant will prompt you to re-authenticate with a fresh token via
+the same flow.
 
-`eneco-parse.py` has no HA dependency and can also be tested locally
-with plain Python — see below.
+- **Customer ID** — your Mijn Eneco customer number.
+- **API key** — the static `apikey` header value used by mijn-eneco.
+- **Session token** — log in to eneco.nl by hand, open DevTools →
+  Application/Storage → Cookies, and copy the value of
+  `__Secure-next-auth.session-token`.
 
-## Local dev shell
+## Adding it to the Energy Dashboard
 
-The Nix flake provides a `python3` with `requests` for local editing
-of `eneco-fetch.py` (whose logic only actually runs inside pyscript on
-HA — `secrets`, `log`, `@service` etc. are pyscript-injected globals).
+Settings → Energy → **Add gas source** (or heating, depending on your HA
+version's wording) → pick "Eneco heat_gj" or "Eneco heat_m3" from the
+statistic picker. Pick whichever unit you actually want tracked — GJ is
+the energy register, m³ is the volume register of the same meter.
+
+## Testing
 
 ```sh
 nix develop
+pytest
 ```
 
-`eneco-parse.py` has no such dependency and runs standalone against a
-sample file:
-
-```sh
-python eneco-parse.py mock.csv
-```
+`tests/test_parser.py` covers the parsing/clamping logic against
+`tests/fixtures/meterstanden.csv` (a synthetic export, not real account
+data). `tests/test_config_flow.py` and `tests/test_coordinator.py` use
+`pytest-homeassistant-custom-component` with a mocked API client.

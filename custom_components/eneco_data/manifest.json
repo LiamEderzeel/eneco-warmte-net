@@ -1,0 +1,13 @@
+{
+  "domain": "eneco_data",
+  "name": "Eneco Data",
+  "codeowners": ["@liamederzeel"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/liamederzeel/eneco-data",
+  "issue_tracker": "https://github.com/liamederzeel/eneco-data/issues",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": ["requests"],
+  "version": "0.1.0"
+}

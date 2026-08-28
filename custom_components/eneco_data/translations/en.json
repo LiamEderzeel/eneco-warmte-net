@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "customer_id": "Customer ID",
+          "api_key": "API key",
+          "session_token": "Session token"
+        },
+        "data_description": {
+          "customer_id": "Your Mijn Eneco customer number.",
+          "api_key": "The static \"apikey\" header value used by mijn-eneco (see the integration's README for how to find this).",
+          "session_token": "The __Secure-next-auth.session-token cookie value, copied from your browser's DevTools after logging in to eneco.nl by hand."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Eneco Data",
+        "description": "Your Eneco session has expired. Log in to eneco.nl by hand and paste a fresh session token.",
+        "data": {
+          "session_token": "Session token"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid session token - it may be expired. Log in to eneco.nl by hand and copy a fresh one.",
+      "cannot_connect": "Could not reach the Eneco API."
+    },
+    "abort": {
+      "already_configured": "This Eneco customer is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_import": {
+        "name": "Last successful import"
+      }
+    }
+  }
+}

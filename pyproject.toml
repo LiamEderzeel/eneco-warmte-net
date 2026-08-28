@@ -1,0 +1,19 @@
+[project]
+name = "eneco-data"
+version = "0.1.0"
+description = "Home Assistant integration that imports Eneco district-heating meter readings into long-term statistics"
+requires-python = ">=3.13"
+dependencies = ["requests"]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-homeassistant-custom-component",
+]
+
+[tool.setuptools.packages.find]
+include = ["custom_components*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
