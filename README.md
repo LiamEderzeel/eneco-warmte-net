@@ -1,8 +1,7 @@
 # Eneco Data
 
 A [Home Assistant](https://www.home-assistant.io/) custom integration that
-pulls your own Eneco GDPR data export (district heating meter readings) and
-imports it into HA's long-term statistics, so it's selectable as a gas/heat
+pulls your own Eneco daily district-heating usage and imports it into HA's long-term statistics, so it's selectable as a gas/heat
 source on the Energy Dashboard.
 
 Installable via [HACS](https://hacs.xyz/) as a custom repository.
@@ -10,18 +9,16 @@ Installable via [HACS](https://hacs.xyz/) as a custom repository.
 ## How it works
 
 - **`custom_components/eneco_data/api.py`** — logs in via a saved NextAuth
-  session cookie, downloads the GDPR export, and extracts
-  `Meterstanden.csv` in memory. No parsing, no HA statistics.
+  session cookie and fetches one month of daily usage per request from the
+  usages API, from `FIRST_MONTH` up to the current month.
 - **`custom_components/eneco_data/parser.py`** — pure parsing logic
-  (Dutch-decimal CSV → monotonic per-date series). No network, no HA
-  dependency.
+  (usages JSON → daily GJ → running total). No network, no HA dependency.
 - **`custom_components/eneco_data/coordinator.py`** — runs the fetch +
-  parse steps once every 12 hours and pushes the two district-heating
-  registers (GJ energy, m³ volume — both from the same physical meter,
-  not a separate gas meter) into HA's recorder as *external statistics*
-  (`eneco_data:heat_gj` / `eneco_data:heat_m3`). There's no separate
-  entity to create by hand — the Energy Dashboard's gas/heat source
-  picker lists external statistics directly.
+  parse steps once every 12 hours and pushes the running total of daily
+  heat usage (GJ) into HA's recorder as an *external statistic*
+  (`eneco_data:heat_gj_daily`). There's no separate entity to create by
+  hand — the Energy Dashboard's gas/heat source picker lists external
+  statistics directly.
 - **`custom_components/eneco_data/config_flow.py`** — the UI setup flow
   (Settings → Devices & Services → Add Integration) and the reauth flow
   that fires automatically when your session cookie expires.
@@ -59,9 +56,8 @@ the same flow.
 ## Adding it to the Energy Dashboard
 
 Settings → Energy → **Add gas source** (or heating, depending on your HA
-version's wording) → pick "Eneco heat_gj" or "Eneco heat_m3" from the
-statistic picker. Pick whichever unit you actually want tracked — GJ is
-the energy register, m³ is the volume register of the same meter.
+version's wording) → pick "Eneco heat_gj_daily" from the
+statistic picker.
 
 ## Testing
 
@@ -70,7 +66,6 @@ nix develop
 pytest
 ```
 
-`tests/test_parser.py` covers the parsing/clamping logic against
-`tests/fixtures/meterstanden.csv` (a synthetic export, not real account
-data). `tests/test_config_flow.py` and `tests/test_coordinator.py` use
+`tests/test_parser.py` covers the usages parsing and running total with
+synthetic payloads. `tests/test_config_flow.py` and `tests/test_coordinator.py` use
 `pytest-homeassistant-custom-component` with a mocked API client.

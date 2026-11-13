@@ -1,62 +1,42 @@
 """Tests for the pure parsing logic - no HA runtime needed beyond imports."""
 
-from pathlib import Path
-
-import pytest
-
-from custom_components.eneco_data.parser import (
-    load_readings,
-    parse_dutch_number,
-    resolve_series,
-)
-
-FIXTURE_PATH = Path(__file__).parent / "fixtures" / "meterstanden.csv"
+from custom_components.eneco_data.parser import cumulative, parse_daily_usage
 
 
-def test_parse_dutch_number():
-    assert parse_dutch_number("3747,19") == 3747.19
-    assert parse_dutch_number("0,0") == 0.0
-    assert parse_dutch_number("1.234,56") == 1234.56
+def _entry(date, value, status="MEASURED"):
+    warmth = (
+        None
+        if value is None
+        else {"status": status, "high": {"scale": 5, "value": value}}
+    )
+    return {"actual": {"date": f"{date}T00:00:00Z", "warmth": warmth}}
 
 
-def test_load_readings_groups_by_date_and_type():
-    with open(FIXTURE_PATH, encoding="utf-8-sig", newline="") as f:
-        readings = load_readings(f)
-
-    assert "WarmthGJ" in readings
-    assert "WarmthM3" in readings
-    # 2024-01-08 has two WarmthM3 rows (a duplicate-value date)
-    assert readings["WarmthM3"]["2024-01-08"] == [1.0, 0.0]
-
-
-def test_resolve_series_is_monotonic_non_decreasing():
-    with open(FIXTURE_PATH, encoding="utf-8-sig", newline="") as f:
-        readings = load_readings(f)
-
-    series = resolve_series(readings["WarmthGJ"])
-    values = [value for _, value in series]
-    assert values == sorted(values)
+PAYLOAD = {
+    "data": {
+        "usages": [
+            {
+                "entries": [
+                    _entry("2026-11-01", 5202),
+                    _entry("2026-11-02", 10000),
+                    _entry("2026-11-03", None),
+                    _entry("2026-11-04", 0, "NOT_MEASURED"),
+                ]
+            }
+        ]
+    }
+}
 
 
-def test_resolve_series_clamps_real_decrease():
-    # 2024-05-01 (198.584) is a real decrease from 2024-01-08 (199.429) -
-    # must be clamped up to the running max, not reported as-is.
-    with open(FIXTURE_PATH, encoding="utf-8-sig", newline="") as f:
-        readings = load_readings(f)
-
-    series = dict(resolve_series(readings["WarmthGJ"]))
-    assert series["2024-01-08"] == 199.429
-    assert series["2024-05-01"] == 199.429
+def test_parse_daily_usage_scales_values_and_skips_unmeasured():
+    assert parse_daily_usage(PAYLOAD) == {"2026-11-01": 0.05202, "2026-11-02": 0.1}
 
 
-def test_resolve_series_takes_max_of_same_date_duplicates():
-    # 2025-05-01 WarmthM3 has both 0,0 and 3482,0 recorded the same day.
-    with open(FIXTURE_PATH, encoding="utf-8-sig", newline="") as f:
-        readings = load_readings(f)
-
-    series = dict(resolve_series(readings["WarmthM3"]))
-    assert series["2025-05-01"] == 3482.0
+def test_cumulative_is_sorted_running_total():
+    series = cumulative({"2026-11-02": 0.1, "2026-11-01": 0.05})
+    assert [d for d, _ in series] == ["2026-11-01", "2026-11-02"]
+    assert [round(v, 2) for _, v in series] == [0.05, 0.15]
 
 
-def test_resolve_series_empty_input():
-    assert resolve_series({}) == []
+def test_cumulative_empty():
+    assert cumulative({}) == []

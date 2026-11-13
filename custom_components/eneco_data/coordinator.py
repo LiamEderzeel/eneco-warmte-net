@@ -1,12 +1,10 @@
-"""Daily update coordinator: fetch the GDPR export, parse it, and push
-district-heating readings into Home Assistant's long-term statistics for
-the Energy Dashboard - as external statistics, since these are periodic
-meter readings, not a live-polled entity.
+"""Update coordinator: fetch daily district-heating usage and push it into
+Home Assistant's long-term statistics for the Energy Dashboard, as external
+statistics.
 """
 
 from __future__ import annotations
 
-import io
 import logging
 from datetime import date, datetime
 
@@ -17,6 +15,7 @@ from homeassistant.components.recorder.models import (
 )
 from homeassistant.components.recorder.statistics import async_add_external_statistics
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -28,10 +27,11 @@ from .const import (
     CONF_CUSTOMER_ID,
     CONF_SESSION_TOKEN,
     DOMAIN,
-    TYPE_TO_STAT,
+    FIRST_MONTH,
+    STAT_SLUG,
     UPDATE_INTERVAL,
 )
-from .parser import load_readings, resolve_series
+from .parser import cumulative
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,8 +59,8 @@ class EnecoCoordinator(DataUpdateCoordinator[datetime]):
 
     async def _async_update_data(self) -> datetime:
         try:
-            csv_bytes, new_token = await self.hass.async_add_executor_job(
-                self.client.fetch_meterstanden_csv
+            daily, new_token = await self.hass.async_add_executor_job(
+                self.client.fetch_daily_usage, FIRST_MONTH
             )
         except EnecoAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
@@ -74,37 +74,30 @@ class EnecoCoordinator(DataUpdateCoordinator[datetime]):
             data={**self.config_entry.data, CONF_SESSION_TOKEN: new_token},
         )
 
-        text = csv_bytes.decode("utf-8-sig")
-        readings = load_readings(io.StringIO(text))
-
-        for row_type, (slug, unit, unit_class) in TYPE_TO_STAT.items():
-            series = resolve_series(readings.get(row_type, {}))
-            if not series:
-                _LOGGER.warning("No data found for %s", row_type)
-                continue
-
-            stats = [
-                StatisticData(
-                    start=dt_util.as_utc(
-                        dt_util.start_of_local_day(date.fromisoformat(d))
-                    ),
-                    state=value,
-                    sum=value,
-                )
-                for d, value in series
-            ]
-            async_add_external_statistics(
-                self.hass,
-                StatisticMetaData(
-                    mean_type=StatisticMeanType.NONE,
-                    has_sum=True,
-                    name=f"Eneco {slug}",
-                    source=DOMAIN,
-                    statistic_id=f"{DOMAIN}:{slug}",
-                    unit_class=unit_class,
-                    unit_of_measurement=unit,
-                ),
-                stats,
+        stats = [
+            StatisticData(
+                start=dt_util.as_utc(dt_util.start_of_local_day(date.fromisoformat(d))),
+                state=total,
+                sum=total,
             )
+            for d, total in cumulative(daily)
+        ]
+        if not stats:
+            _LOGGER.warning("No usage data returned")
+            return dt_util.utcnow()
+
+        async_add_external_statistics(
+            self.hass,
+            StatisticMetaData(
+                mean_type=StatisticMeanType.NONE,
+                has_sum=True,
+                name=f"Eneco {STAT_SLUG}",
+                source=DOMAIN,
+                statistic_id=f"{DOMAIN}:{STAT_SLUG}",
+                unit_class="energy",
+                unit_of_measurement=UnitOfEnergy.GIGA_JOULE,
+            ),
+            stats,
+        )
 
         return dt_util.utcnow()

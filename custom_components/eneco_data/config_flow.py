@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 import voluptuous as vol
@@ -28,7 +29,7 @@ async def _validate(
     """Try one fetch. Returns an errors dict (empty on success)."""
     client = EnecoClient(customer_id, api_key, session_token)
     try:
-        await hass.async_add_executor_job(client.fetch_meterstanden_csv)
+        await hass.async_add_executor_job(client.fetch_daily_usage, date.today().replace(day=1))
     except EnecoAuthError:
         return {"base": "invalid_auth"}
     except EnecoApiError:

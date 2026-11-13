@@ -20,11 +20,11 @@ USER_INPUT = {
     CONF_SESSION_TOKEN: "test-session-token",
 }
 
-FETCH_TARGET = "custom_components.eneco_data.config_flow.EnecoClient.fetch_meterstanden_csv"
+FETCH_TARGET = "custom_components.eneco_data.config_flow.EnecoClient.fetch_daily_usage"
 
 
 async def test_user_flow_success(recorder_mock, enable_custom_integrations, hass):
-    with patch(FETCH_TARGET, return_value=(b"", "renewed-token")):
+    with patch(FETCH_TARGET, return_value=({}, "renewed-token")):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
@@ -68,7 +68,7 @@ async def test_reauth_flow_updates_token(
 ):
     mock_config_entry.add_to_hass(hass)
 
-    with patch(FETCH_TARGET, return_value=(b"", "brand-new-token")):
+    with patch(FETCH_TARGET, return_value=({}, "brand-new-token")):
         result = await mock_config_entry.start_reauth_flow(hass)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {CONF_SESSION_TOKEN: "brand-new-token"}
