@@ -48,6 +48,11 @@ Home Assistant will prompt you to re-authenticate with a fresh token via
 the same flow.
 
 - **Customer ID** — your Mijn Eneco customer number.
+- **Account number** — usually `1`. It's the number after `/accounts/` in
+  the usages request Mijn Eneco makes
+  (`…/customers/<customer ID>/accounts/<account number>/usages`); Eneco can
+  move you to a new account after a contract change. If it changes later,
+  update it under the integration's **Configure** options.
 - **API key** — the static `apikey` header value used by mijn-eneco.
 - **Session token** — log in to eneco.nl by hand, open DevTools →
   Application/Storage → Cookies, and copy the value of
@@ -58,6 +63,21 @@ the same flow.
 Settings → Energy → **Add gas source** (or heating, depending on your HA
 version's wording) → pick "Eneco heat_gj_daily" from the
 statistic picker.
+
+### Costs
+
+External statistics can't use the Energy Dashboard's fixed-price or
+price-entity options, so the integration can import a cost statistic
+itself: set **Price per GJ** (your variable heat tariff incl. VAT) under
+the integration's **Configure** options. It then imports
+`eneco_data:heat_cost` (running total of GJ × price), which you pick as
+"Use an entity tracking the total costs" on the gas/heat source. The whole
+series is rewritten on every run, so a new price applies to all history.
+Leave it at 0 to skip costs.
+
+If Eneco rejects the stored session token or apikey, Home Assistant asks
+you to re-authenticate; the reauth form takes a fresh token and, if it
+changed, the new apikey.
 
 ## Testing
 

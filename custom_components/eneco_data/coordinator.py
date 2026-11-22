@@ -22,10 +22,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import EnecoApiError, EnecoAuthError, EnecoClient
+from .config_flow import account_id
 from .const import (
     CONF_API_KEY,
     CONF_CUSTOMER_ID,
+    CONF_HEAT_PRICE,
     CONF_SESSION_TOKEN,
+    COST_STAT_SLUG,
     DOMAIN,
     FIRST_MONTH,
     STAT_SLUG,
@@ -55,6 +58,7 @@ class EnecoCoordinator(DataUpdateCoordinator[datetime]):
             entry.data[CONF_CUSTOMER_ID],
             entry.data[CONF_API_KEY],
             entry.data[CONF_SESSION_TOKEN],
+            account_id(entry),
         )
 
     async def _async_update_data(self) -> datetime:
@@ -99,5 +103,31 @@ class EnecoCoordinator(DataUpdateCoordinator[datetime]):
             ),
             stats,
         )
+
+        price = self.config_entry.options.get(CONF_HEAT_PRICE) or 0
+        if price > 0:
+            # Running total of GJ times the configured price per GJ. The
+            # whole series is rewritten every run, so a new price applies to
+            # all history.
+            async_add_external_statistics(
+                self.hass,
+                StatisticMetaData(
+                    mean_type=StatisticMeanType.NONE,
+                    has_sum=True,
+                    name=f"Eneco {COST_STAT_SLUG}",
+                    source=DOMAIN,
+                    statistic_id=f"{DOMAIN}:{COST_STAT_SLUG}",
+                    unit_class=None,
+                    unit_of_measurement=self.hass.config.currency,
+                ),
+                [
+                    StatisticData(
+                        start=s["start"],
+                        state=round(s["sum"] * price, 5),
+                        sum=round(s["sum"] * price, 5),
+                    )
+                    for s in stats
+                ],
+            )
 
         return dt_util.utcnow()

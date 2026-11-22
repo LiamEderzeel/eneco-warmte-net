@@ -4,25 +4,30 @@
       "user": {
         "data": {
           "customer_id": "Customer ID",
+          "account_id": "Account number",
           "api_key": "API key",
           "session_token": "Session token"
         },
         "data_description": {
           "customer_id": "Your Mijn Eneco customer number.",
+          "account_id": "The account number in the usages request Mijn Eneco makes (…/customers/<customer ID>/accounts/<account number>/usages). Usually 1, but it can change after a contract change.",
           "api_key": "The static \"apikey\" header value used by mijn-eneco (see the integration's README for how to find this).",
           "session_token": "The __Secure-next-auth.session-token cookie value, copied from your browser's DevTools after logging in to eneco.nl by hand."
         }
       },
       "reauth_confirm": {
         "title": "Re-authenticate Eneco Data",
-        "description": "Your Eneco session has expired. Log in to eneco.nl by hand and paste a fresh session token.",
+        "description": "Eneco rejected the stored credentials. Log in to eneco.nl by hand and paste a fresh session token. If the apikey changed, paste the new one as well.",
         "data": {
+          "api_key": "API key",
           "session_token": "Session token"
         }
       }
     },
     "error": {
       "invalid_auth": "Invalid session token - it may be expired. Log in to eneco.nl by hand and copy a fresh one.",
+      "invalid_api_key": "Eneco rejected the API key. Copy the current apikey header from a mijn-eneco request.",
+      "invalid_account": "Eneco doesn't know this account number. Check the number in the usages request Mijn Eneco makes.",
       "cannot_connect": "Could not reach the Eneco API."
     },
     "abort": {
@@ -34,6 +39,21 @@
     "sensor": {
       "last_import": {
         "name": "Last successful import"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Eneco Data options",
+        "data": {
+          "account_id": "Account number",
+          "heat_price": "Price per GJ"
+        },
+        "data_description": {
+          "account_id": "The account number in the usages request Mijn Eneco makes. Change it if Eneco moved you to a new account.",
+          "heat_price": "Variable heat tariff per GJ, incl. VAT. When above 0, a cost statistic (eneco_data:heat_cost) is imported that you can pick as the cost source on the Energy Dashboard. 0 turns it off."
+        }
       }
     }
   }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetch the Eneco usages JSON and print it.
-# Usage: ENECO_TOKEN=... ENECO_API_KEY=... ENECO_CUSTOMER_ID=... scripts/fetch-usages.sh [start-date]
+# Usage: ENECO_TOKEN=... ENECO_API_KEY=... ENECO_CUSTOMER_ID=... [ENECO_ACCOUNT_ID=1] scripts/fetch-usages.sh [start-date]
 # ENECO_TOKEN is the __Secure-next-auth.session-token cookie; ENECO_API_KEY the apikey request header.
 set -euo pipefail
 
@@ -21,7 +21,7 @@ session=$(curl -sS -w '\n%{http_code}' https://www.eneco.nl/mijn-eneco/api/auth/
 [[ ${session##*$'\n'} == 200 ]] || { echo "session refresh failed (${session##*$'\n'}): ${session%$'\n'*}" >&2; exit 1; }
 id_token=$(jq -er .idToken <<<"${session%$'\n'*}") || { echo "no idToken in response: ${session%$'\n'*}" >&2; exit 1; }
 
-response=$(curl -sS -w '\n%{http_code}' "https://api-digital.enecogroup.com/dxpweb/v3/nl/eneco/customers/${ENECO_CUSTOMER_ID}/accounts/1/usages" \
+response=$(curl -sS -w '\n%{http_code}' "https://api-digital.enecogroup.com/dxpweb/v3/nl/eneco/customers/${ENECO_CUSTOMER_ID}/accounts/${ENECO_ACCOUNT_ID:-1}/usages" \
   -G \
   --data-urlencode "interval=Day" \
   --data-urlencode "aggregation=Month" \
